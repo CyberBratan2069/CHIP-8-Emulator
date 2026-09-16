@@ -218,11 +218,30 @@ static void emulate_cycle(Chip8CPU *cpu) {
         }
 
         /** DXYN = Draws a sprite at coordinate (VX, VY) that has a width of 8 pixels and a height of N pixels.
-         * Each row of 8 pixels is read as bit-coded starting from memory location I; I value does not change after
-         * the execution of this instruction. As described above, VF is set to 1 if any screen pixels are flipped from
-         * set to unset when the sprite is drawn, and to 0 if that does not happen. */
+                 * Each row of 8 pixels is read as bit-coded starting from memory location I; I value does not change after
+                 * the execution of this instruction. As described above, VF is set to 1 if any screen pixels are flipped from
+                 * set to unset when the sprite is drawn, and to 0 if that does not happen. */
         else if ((opcode & 0xF000) == 0xD000) {
+                const uint8_t x_pos = cpu->V[X] % 64;
+                const uint8_t y_pos = cpu->V[Y] % 32;
 
+                cpu->V[0xF] = 0;
+
+                for (int row = 0; row < N; row++) {
+                        if (y_pos + row >= 32) break;
+
+                        const uint8_t spriteByte = cpu->memory[cpu->I + row];
+
+                        for (int col = 0; col < 8; col++) {
+                                if (x_pos + col >= 64) continue;
+
+                                if ((spriteByte & (0x80 >> col)) != 0) {
+                                        const int screenIndex = (y_pos + row) * 64 + (x_pos + col);
+                                        if (cpu->gfx[screenIndex] == 1) cpu->V[0xF] = 1;
+                                        cpu->gfx[screenIndex] ^= 1;
+                                }
+                        }
+                }
         }
 
         /** EX9E = Skips the next instruction if the key stored in VX(only consider the lowest nibble) is pressed
@@ -259,10 +278,68 @@ static void emulate_cycle(Chip8CPU *cpu) {
 
         /** FX07 = Sets VX to the value of the delay timer. */
         else if ((opcode & 0xF000) == 0xF000 && NN == 0x07) {
-                
+                cpu->V[X] = cpu->delay_timer;
         }
 
+        /** FX15 = Sets the delay timer to VX. */
+        else if ((opcode & 0xF000) == 0xF000 && NN == 0x15) {
+                cpu->delay_timer = cpu->V[X];
+        }
 
+        /** FX18 = Sets the sound timer to VX. */
+        else if ((opcode & 0xF000) == 0xF000 && NN == 0x18) {
+                cpu->sound_timer = cpu->V[X];
+        }
+
+        /** FX29 = Sets I to the location of the sprite for the character in VX (only consider the lowest nibble).
+         * Characters 0-F (in hexadecimal) are represented by a 4x5 font. */
+        else if ((opcode & 0xF000) == 0xF000 && NN == 0x29) {
+                cpu->I = 0x050 + cpu->V[X] * 5;
+        }
+
+        /** FX33 = Stores the binary-coded decimal representation of VX, with the hundreds digit in memory at location
+         * in I, the tens digit at location I+1, and the ones digit at location I+2. */
+        else if ((opcode & 0xF000) == 0xF000 && NN == 0x33) {
+                cpu->memory[cpu->I] = cpu->V[X] / 100;
+                cpu->memory[cpu->I + 1] = cpu->V[X] / 10 % 10;
+                cpu->memory[cpu->I + 2] = cpu->V[X] % 10;
+        }
+
+        /** FX55 = Stores from V0 to VX (including VX) in memory, starting at address I. The offset from I is increased
+         * by 1 for each value written, but I itself is left unmodified. */
+        else if ((opcode & 0xF000) == 0xF000 && NN == 0x55) {
+                for (int i=0; i<= X; i++) {
+                        cpu->memory[cpu->I + i] = cpu->V[i];
+                }
+        }
+
+        /** FX66 = Fills from V0 to VX (including VX) with values from memory, starting at address I. The offset from
+         * I is increased by 1 for each value read, but I itself is left unmodified.*/
+        else if ((opcode & 0xF000) == 0xF000 && NN == 0x65) {
+                for (int i=0; i<= X; i++) {
+                        cpu->V[i] = cpu->memory[cpu->I + i];
+                }
+        }
+}
+
+
+static void handle_input(Chip8CPU *cpu) {
+        cpu->keypad[0x1] = IsKeyPressed(KEY_ONE);
+        cpu->keypad[0x2] = IsKeyDown(KEY_TWO);
+        cpu->keypad[0x3] = IsKeyDown(KEY_THREE);
+        cpu->keypad[0xC] = IsKeyDown(KEY_FOUR);
+        cpu->keypad[0x4] = IsKeyDown(KEY_Q);
+        cpu->keypad[0x5] = IsKeyDown(KEY_W);
+        cpu->keypad[0x6] = IsKeyDown(KEY_E);
+        cpu->keypad[0xD] = IsKeyDown(KEY_R);
+        cpu->keypad[0x7] = IsKeyDown(KEY_A);
+        cpu->keypad[0x8] = IsKeyDown(KEY_S);
+        cpu->keypad[0x9] = IsKeyDown(KEY_D);
+        cpu->keypad[0xE] = IsKeyDown(KEY_F);
+        cpu->keypad[0xA] = IsKeyDown(KEY_Z);
+        cpu->keypad[0x0] = IsKeyDown(KEY_X);
+        cpu->keypad[0xB] = IsKeyDown(KEY_C);
+        cpu->keypad[0xF] = IsKeyDown(KEY_V);
 }
 
 
@@ -285,6 +362,7 @@ int main(const int argc, char **argv) {
         SetTargetFPS(60);
 
         while (!WindowShouldClose()) {
+                handle_input(&cpu);
 
                 for (int i = 0; i < 10; i++) {
                         emulate_cycle(&cpu);

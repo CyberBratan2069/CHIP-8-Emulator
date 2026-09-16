@@ -7,7 +7,7 @@ set(CMAKE_C_STANDARD 11)
 find_package(raylib REQUIRED)
 
 # Dein Emulator
-add_executable(CHIP_8_Emulator main.c)
+add_executable(CHIP_8_Emulator src/main.c)
 
 # Raylib verlinken
 target_link_libraries(CHIP_8_Emulator PRIVATE raylib)
