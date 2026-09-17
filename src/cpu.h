@@ -18,7 +18,8 @@
 #define STACK_SIZE           16
 #define TRUE                 1
 #define FALSE                0
-#define BOOL                 int
+#define BOOL                 uint8_t
+
 
 static const uint8_t chip8_fontSet[80] = {
         0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
